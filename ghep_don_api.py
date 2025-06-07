@@ -1,3 +1,4 @@
+
 from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import List
@@ -15,6 +16,10 @@ class InputData(BaseModel):
     gioi_han_min: float
     gioi_han_max: float
     danh_sach: List[Product]
+
+@app.get("/")
+def root():
+    return {"message": "API ghép đơn đang chạy!"}
 
 @app.post("/ghep_kho_giay")
 def ghep_kho_giay(data: InputData):
@@ -51,12 +56,13 @@ def ghep_kho_giay(data: InputData):
                     break
 
         if min_limit <= total <= max_limit:
-            groups.append(group)
+            groups.append([g.dict() for _, g in group])
         else:
-            for g in group:
+            for _, g in group:
                 index = all_items.index(g)
                 used.discard(index)
 
     return {
+        "tong_so_nhom": len(groups),
         "danh_sach_nhom": groups
     }
