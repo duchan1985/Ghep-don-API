@@ -1,36 +1,62 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import List
+from itertools import combinations
 
 app = FastAPI()
 
-# Điều chỉnh lại model để tương thích dữ liệu PowerApps
-class DonHang(BaseModel):
+class Product(BaseModel):
     ProductName: str
-    DinhLuong: int
     PaperSize: float
+    DinhLuong: float
     Quantity: int
 
-class RequestData(BaseModel):
-    gioi_han: float
-    danh_sach: List[DonHang]
+class InputData(BaseModel):
+    gioi_han_min: float
+    gioi_han_max: float
+    danh_sach: List[Product]
 
-@app.post("/ghep_don")
-def ghep_don(data: RequestData):
-    from itertools import combinations
+@app.post("/ghep_kho_giay")
+def ghep_kho_giay(data: InputData):
+    min_limit = data.gioi_han_min
+    max_limit = data.gioi_han_max
 
-    best_combo = []
-    best_total = 0
+    # Tách sản phẩm theo Quantity (explode)
+    all_items = []
+    for p in data.danh_sach:
+        for _ in range(p.Quantity):
+            all_items.append(Product(**p.dict(), Quantity=1))
 
-    # Lặp qua các tổ hợp từ 2 đến 4 phần tử
-    for r in range(2, 5):
-        for combo in combinations(data.danh_sach, r):
-            tong = sum(item.PaperSize for item in combo)
-            if tong <= data.gioi_han and tong > best_total:
-                best_total = tong
-                best_combo = combo
+    used = set()
+    groups = []
+
+    # Sắp xếp giảm dần theo PaperSize
+    sorted_items = sorted(enumerate(all_items), key=lambda x: x[1].PaperSize, reverse=True)
+
+    for i, item in sorted_items:
+        if i in used:
+            continue
+        group = [item]
+        total = item.PaperSize
+        used.add(i)
+
+        for j, other in sorted_items:
+            if j in used or i == j:
+                continue
+            if total + other.PaperSize <= max_limit:
+                group.append(other)
+                total += other.PaperSize
+                used.add(j)
+                if total >= min_limit:
+                    break
+
+        if min_limit <= total <= max_limit:
+            groups.append(group)
+        else:
+            for g in group:
+                index = all_items.index(g)
+                used.discard(index)
 
     return {
-        "mang": [item.dict() for item in best_combo],
-        "tong": best_total
+        "danh_sach_nhom": groups
     }
